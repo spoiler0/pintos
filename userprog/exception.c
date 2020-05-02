@@ -137,8 +137,18 @@ page_fault (struct intr_frame *f) {
 
 	/* Determine cause. */
 	not_present = (f->error_code & PF_P) == 0;
+    if (not_present){
+        exit(-1);
+    }
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
+
+    if(write && user){ //for bad-write2 case
+        exit(-1);
+    }
+    if(!write && user){ //for bad-read2 case
+        exit(-1);
+    }
 
 #ifdef VM
 	/* For project 3 and later. */

@@ -26,6 +26,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+static void argument_passing (const char *file_name, struct intr_frame *if_);
 
 /* General process initializer for initd and other process. */
 static void
@@ -42,6 +43,7 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
+    char *ptr;
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -51,7 +53,8 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+    
+	tid = thread_create (strtok_r(file_name," ", &ptr), PRI_DEFAULT, initd, fn_copy); //file name을 parsing 후 대입
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -76,6 +79,7 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
+
 	return thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
 }
@@ -122,7 +126,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if; // = parent->tf; //systemcall handler에서 처리함
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -201,6 +205,10 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+    int n = 0;
+    while(n != 1000000000){
+        n += 1;
+    }
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
@@ -328,17 +336,25 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+    char *ptr;
+    char *token;
+    char file_name2[128];
 
+    strlcpy(file_name2, file_name, strlen(file_name)+1); //맨 마지막 null
+    
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
 
+    //argument_passing(file_name, if_);
+    token = strtok_r(file_name2," ", &ptr);
+
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (token);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", token);
 		goto done;
 	}
 
@@ -350,7 +366,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", file_name);
+		printf ("load: %s: error loading executable\n", token);
 		goto done;
 	}
 
@@ -414,6 +430,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
+
+
+    argument_passing(file_name, if_);
+   //printf("111111\n");
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
@@ -425,6 +445,57 @@ done:
 	return success;
 }
 
+static void
+argument_passing (const char *file_name, struct intr_frame *if_){
+    char file[128];
+    char *token;
+    char *ptr;
+
+    char *argv[32]; //arbitrary
+    uint64_t adr[32];
+    int argc = 0;
+
+    strlcpy(file, file_name, strlen(file_name)+1); //맨 마지막 null
+    
+    token = strtok_r(file," ",&ptr);
+    while(token){
+        argv[argc] = token;
+        token = strtok_r(NULL," ",&ptr);
+        argc = argc + 1;
+    }
+    /*
+    for(int k = 0; k<argc; k++){
+        printf("%s\n",argv[k]);
+    }*/
+
+    //push argv[][] first
+    for(int i = argc-1; i>=0; i--){
+        if_->rsp -= strlen(argv[i])+1; //null 포함
+        strlcpy(((char *)if_->rsp), argv[i], strlen(argv[i])+1);
+        adr[i] = (uint64_t)if_->rsp;
+    }
+    // word-align round the stack pointer down to a multiple of 8
+    while(( (uint64_t)if_->rsp )%8 != 0){
+        if_->rsp -= 1;
+    }
+    //push argv[]
+    if_->rsp -= 8; //64비트 시스템 포인터 크기
+    *((int *)if_->rsp) = 0; //push NULL
+
+    for(int j = argc-1; j>=0; j--){
+        if_->rsp -= 8;
+        *((uint64_t *)if_->rsp) = adr[j];
+    }
+    //push return address
+    if_->rsp -= 8;
+    *((int *)if_->rsp) = 0;
+    
+    (if_->R).rdi = argc;
+    (if_->R).rsi = if_->rsp + 8;
+    
+    //printf("1/n 1/n");
+    //hex_dump(if_->rsp, if_->rsp, USER_STACK , true);
+} 
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */

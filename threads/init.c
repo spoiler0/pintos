@@ -70,6 +70,7 @@ int
 main (void) {
 	uint64_t mem_end;
 	char **argv;
+    //ASSERT(1==0);
 
 	/* Clear BSS and get machine's RAM size. */
 	bss_init ();

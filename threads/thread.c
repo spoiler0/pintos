@@ -125,6 +125,7 @@ thread_start (void) {
 	struct semaphore idle_started;
 	sema_init (&idle_started, 0);
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
+    //printf("%d\n", thread_get_priority());
 
 	/* Start preemptive thread scheduling. */
 	intr_enable ();
@@ -409,6 +410,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+    for (int i=0; i<128; i++){
+        t -> files[i] = NULL; //files 초기화
+    }
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
