@@ -40,6 +40,8 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
+static struct list sleep_thread_list;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -63,6 +65,7 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
+void check_ready_list(void);
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -184,7 +187,7 @@ thread_create (const char *name, int priority,
 	tid_t tid;
 
 	ASSERT (function != NULL);
-
+	
 	/* Allocate thread. */
 	t = palloc_get_page (PAL_ZERO);
 	if (t == NULL)
@@ -245,6 +248,19 @@ thread_unblock (struct thread *t) {
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
+/*
+void
+check_ready_list (void) {
+    int highest_ready_pri;
+
+    highest_ready_pri = list_entry(list_begin(&ready_list), struct thread, elem)-> priority;
+
+    if (highest_ready_pri > thread_get_priority()) {
+	
+	    thread_yield();
+
+    }
+}*/
 
 /* Returns the name of the running thread. */
 const char *
@@ -289,6 +305,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
+	//printf("do_schedule!\n");
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -307,6 +324,11 @@ thread_yield (void) {
 		list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+bool 
+larger_priority(const struct list_elem *a, const struct list_elem *b, void *aux){
+    return (list_entry(a, struct thread, elem)->priority) > (list_entry(b, struct thread, elem)->priority);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -411,9 +433,28 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 
+    t->donated = 0;
+
+	list_init(&t -> childs);
+    list_push_back(&(running_thread()->childs), &t->child_elem);
+	t -> is_waited = false;
+	t -> is_exited = false;
+    t -> parent_id = 0;
+	t -> fork_error = false;
+
+	sema_init(&t -> sema_exit, 0);
+	sema_init(&t -> sema_wait, 0);
+    sema_init(&t -> sema_fork, 0);
+
+	//t -> files = (struct file *)malloc(sizeof(struct file *) * 128);
+/////////
+
+
     for (int i=0; i<128; i++){
-        t -> files[i] = NULL; //files 초기화
+        //*(t -> files + i * sizeof(struct file *)) = NULL;
+		t -> files[i] = NULL; //files 초기화
     }
+    strlcpy(t-> load_file_name, name, sizeof t->name);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

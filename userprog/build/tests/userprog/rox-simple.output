@@ -12,7 +12,7 @@ Pintos booting with:
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0xffe0000 (Usable: 260,992 kB)
 Calibrating timer...  104,755,200 loops/s.
-hd0:0: detected 305 sector (152 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 313 sector (156 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1:0: detected 101 sector (50 kB) disk, model "QEMU HARDDISK", serial "QM00003"
 Formatting file system...done.
@@ -23,15 +23,15 @@ Executing 'rox-simple':
 (rox-simple) open "rox-simple"
 (rox-simple) read "rox-simple"
 (rox-simple) try to write "rox-simple"
-(rox-simple) try to write "rox-simple": FAILED
-rox-simple: exit(1)
+(rox-simple) end
+rox-simple: exit(0)
 Execution of 'rox-simple' complete.
-Timer: 869 ticks
-Thread: 6 idle ticks, 863 kernel ticks, 0 user ticks
+Timer: 63 ticks
+Thread: 3 idle ticks, 56 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 84 reads, 231 writes
+hd0:1: 83 reads, 230 writes
 hd1:0: 101 reads, 0 writes
-Console: 981 characters output
+Console: 949 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

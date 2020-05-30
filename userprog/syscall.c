@@ -10,6 +10,7 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "userprog/process.h"
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -21,6 +22,11 @@ bool remove (const char *);
 int open (const char *);
 int filesize (int );
 void close (int );
+void seek (int , unsigned);
+unsigned tell (int);
+int wait (tid_t);
+tid_t fork(const char *, struct intr_frame *);
+int exec(const char *);
 
 //static int get_user (const uint8_t *);
 //static int get_user (const uint8_t *);
@@ -53,7 +59,7 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f ) {
+syscall_handler (struct intr_frame *f) {
 	
     uint64_t arg[6];
     arg[0] = f->R.rax;
@@ -64,11 +70,6 @@ syscall_handler (struct intr_frame *f ) {
     arg[5] = f->R.r8;
     arg[6] = f->R.r9;
     /*
-    for(int i=0; i<6; i++){
-        arg[i] =  f->rsp + 8*i;
-        //strlcpy( arg[i], ((char *)(f->rsp + 8*i)), strlen(argv[i])+1);
-    }*/
-/*
     check_arg(arg[0]);
     printf("syscall: %d\n",*(int *)arg[0]);
 */
@@ -77,17 +78,17 @@ syscall_handler (struct intr_frame *f ) {
             halt();
             break;
         case SYS_EXIT :
-            //check_arg(arg[1]);
             f->R.rax = arg[1];
             exit(arg[1]);
             break;
         case SYS_FORK:
-            //thread_current() -> tf = f;
-            //f->R.rax = fork (arg[1]);
+            f->R.rax = fork (arg[1], f);
             break;
         case SYS_EXEC:
+            f->R.rax = exec(arg[1]);
             break;
         case SYS_WAIT:
+            f->R.rax = wait(arg[1]);
             break;
         case SYS_CREATE:
             f->R.rax = create(arg[1],arg[2]);
@@ -105,11 +106,13 @@ syscall_handler (struct intr_frame *f ) {
             f->R.rax = read(arg[1],arg[2],arg[3]);
             break;
         case SYS_WRITE:
-            f->R.rax = write (arg[1], arg[2], arg[3]);
+            f->R.rax = write(arg[1], arg[2], arg[3]);
             break;
         case SYS_SEEK:
+            seek(arg[1],arg[2]);
             break;
         case SYS_TELL:
+            f->R.rax = tell(arg[1]);
             break;
         case SYS_CLOSE:
             close(arg[1]);
@@ -121,9 +124,7 @@ syscall_handler (struct intr_frame *f ) {
 
 
     }
-    //printf("syscall: %d\n",(f->R).rax);
-	//printf ("system call!\n");
-	
+    
 }
 /*
 static int
@@ -137,6 +138,7 @@ get_user (const uint8_t *uaddr) {
 void
 check_arg(void *addr){
     if ((!is_user_vaddr(addr))||(addr == NULL)){
+        //printf("1\n");
         exit(-1);
     }
     // exception에서 page fault 시 exit(-1) 코드 추가
@@ -155,14 +157,40 @@ halt(void){
 void
 exit (int status){
 
-    for(int i=3; i<128; i++){
-        if(thread_current()->files[i] != NULL){
-            close(i);
-        }
-    }
     
-    printf("%s: exit(%d)\n", thread_current()->name, status);
+    struct thread * current = thread_current();
+    current -> exit_status = status;
+
+    printf("%s: exit(%d)\n", current -> name, status);
     thread_exit();
+}
+
+tid_t
+fork(const char *thread_name, struct intr_frame *f) {
+
+
+    tid_t tid = process_fork(thread_name, f);
+    //struct thread * current = thread_current();
+
+    return tid;
+    
+}
+
+int
+exec(const char *cmd_line) {
+
+    char file_name2[128];
+
+    strlcpy(file_name2, cmd_line, strlen(cmd_line)+1);
+
+    return process_exec2(file_name2);
+    
+}
+
+int 
+wait (tid_t pid) {
+    //printf("%d\n",pid);
+    return process_wait(pid);
 }
 
 int 
@@ -181,12 +209,13 @@ write (int fd, const void *buffer, unsigned size){
         
         if (_file == NULL ){
             return 0;
+        } else if(_file -> deny_write == true) {
+            return 0;
         }
-        
+        //printf("1\n");
         return file_write(_file, buffer, size); //아직 file 확장은 구현안됨
     }
     else{
-        //printf("1\n");
         return 0;
     }
     
@@ -200,7 +229,7 @@ read (int fd, void *buffer, unsigned size){
     struct file * _file;
     _file = thread_current() -> files[fd];
 
-    if (fd==0){ //stdin
+    if (fd==0){ //stdin 
         input_getc();
         return size;
     }
@@ -245,6 +274,7 @@ open (const char *file){
 
     _file = filesys_open(file);
 
+    //printf("!!!!\n");
     if (_file == NULL){
         //printf("1\n");
         return -1;
@@ -254,6 +284,10 @@ open (const char *file){
             i += 1;
         }
         if(i==128) return -1; //all of files are full.
+
+        if(!strcmp(thread_current()->load_file_name, file)){// 현재 로드된 파일과 같은 파일을 열려하면 0
+            file_deny_write(_file);
+        }
 
         thread_current() -> files[i] = _file;
 
@@ -292,6 +326,35 @@ close (int fd){
         return;
     }
 
+    if(_file->deny_write == true){
+        file_allow_write(_file);
+    }
+
     file_close (_file);
     thread_current()->files[fd] = NULL; //나중에 exit에서 중복 방지
+}
+
+/* Sets the current position in FILE to NEW_POS bytes from the
+ * start of the file. */
+void 
+seek (int fd, unsigned position){
+    struct file *_file;
+    _file = thread_current()->files[fd];
+
+    //printf("1\n");
+    //check_arg(_file);
+    //printf("2\n");
+    file_seek(_file, (off_t) position);
+}
+
+/* Returns the current position in FILE as a byte offset from the
+ * start of the file. */
+unsigned 
+tell (int fd){
+    struct file *_file;
+    _file = thread_current()->files[fd];
+
+    check_arg(_file);
+
+    return file_tell(_file);
 }

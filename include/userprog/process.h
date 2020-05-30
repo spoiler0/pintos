@@ -10,4 +10,9 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
 
+// my functions
+struct thread *get_child_process(tid_t);
+void remove_child_process(struct thread *);
+int process_exec2 (void *);
+
 #endif /* userprog/process.h */

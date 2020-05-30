@@ -54,17 +54,22 @@ consume_some_resources (void)
   for (fd = 0; fd < fdmax; fd++) {
 #ifdef EXTRA2
 	  if (fd != 0 && (random_ulong () & 1)) {
-		if (dup2(random_ulong () % fd, fd+fdmax) == -1)
-			break;
+    if (dup2(random_ulong () % fd, fd+fdmax) == -1)
+    	break;
 		else
 			if (open (test_name) == -1)
-			  break;
+    	  break;
 	  }
 #else
+    //printf("test_name : %s\n", test_name);
+    //printf("fd : %d\n", fd);
 		if (open (test_name) == -1)
+      //printf("3\n");
 		  break;
+    
 #endif
   }
+  //printf("fd : %d\n", fd);
 }
 
 /* Consume some resources, then terminate this process
@@ -117,7 +122,6 @@ make_children (void) {
         fail ("Unreachable");
       }
     }
-
     snprintf (child_name, sizeof child_name, "%s_%d_%s", "child", i, "O");
     pid = fork(child_name);
     if (pid < 0) {
@@ -128,7 +132,6 @@ make_children (void) {
       break;
     }
   }
-
   int depth = wait (pid);
   if (depth < 0)
 	  fail ("Should return > 0.");

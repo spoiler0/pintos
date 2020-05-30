@@ -16,7 +16,10 @@ test_main (void)
   CHECK ((handle = open ("child-rox")) > 1, "open \"child-rox\"");
   CHECK (read (handle, buffer, sizeof buffer) == (int) sizeof buffer,
          "read \"child-rox\"");
+  //printf("read complete\n");
+  //printf("handle : %d\n", handle);
   seek (handle, 0);
+  //printf("seek complete\n");
   CHECK (write (handle, buffer, sizeof buffer) == (int) sizeof buffer,
          "write \"child-rox\"");
 

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "filesys/file.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -92,7 +93,9 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-
+    
+    bool donated;
+	int donated_priority;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -100,6 +103,27 @@ struct thread {
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
     struct file* files[128]; // maximum number
+    // struct file *files;
+	char load_file_name[16]; //현재 load된 파일 이름
+
+	struct thread *parent;
+    int parent_id; //for finding parent of child
+
+	struct list_elem child_elem;
+	struct list childs;
+
+	struct semaphore sema_exit;
+	struct semaphore sema_wait;
+    struct semaphore sema_fork;
+
+
+	int exit_status;
+
+	bool is_waited;
+	bool is_exited;
+
+	bool fork_error;
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -109,6 +133,8 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	struct intr_frame *temp_tf;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -145,4 +171,10 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+/*
+void sleep_thread(int64_t);
+void time_to_wake_up(int64_t);
+bool prior_wake_time(const struct list_elem *, const struct list_elem *, void *aux);
+bool larger_priority(const struct list_elem *, const struct list_elem *, void *aux);
+*/
 #endif /* threads/thread.h */

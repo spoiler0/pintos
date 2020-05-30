@@ -245,7 +245,9 @@ run_task (char **argv) {
 #ifdef USERPROG
 	if (thread_tests){
 		run_test (task);
+        
 	} else {
+        
 		process_wait (process_create_initd (task));
 	}
 #else
