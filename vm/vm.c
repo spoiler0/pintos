@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "lib/kernel/hash.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -62,20 +63,25 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	//struct page *page = NULL;
+	struct page p;
+	struct hash_elem *e;
 	/* TODO: Fill this function. */
+	p.va = va;
+	e = hash_find(&spt -> pages, &p.hash_elem);
 
-	return page;
+	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
 /* Insert PAGE into spt with validation. */
+// page alrealy exists in spt -> return false ?
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt,
+		struct page *page) {
 	int succ = false;
 	/* TODO: Fill this function. */
-
+	succ = hash_insert(&spt -> pages, &page->hash_elem) == NULL;
 	return succ;
 }
 
@@ -111,7 +117,16 @@ vm_evict_frame (void) {
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
+	void *kva;
 	/* TODO: Fill this function. */
+	kva = palloc_get_page(PAL_USER);
+	if (kva){
+		frame -> kva = kva;
+		frame -> page = NULL;
+	} else {
+		PANIC("todo");
+	}
+	
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -150,9 +165,10 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+	page -> va = va;
 
 	return vm_do_claim_page (page);
 }
@@ -168,12 +184,15 @@ vm_do_claim_page (struct page *page) {
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 
+	
+
 	return swap_in (page, frame->kva);
 }
 
 /* Initialize new supplemental page table */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init(&spt->pages, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
