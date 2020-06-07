@@ -4,7 +4,8 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
-
+#include "vm/uninit.h"
+#include "vm/anon.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -41,6 +42,7 @@ static struct frame *vm_evict_frame (void);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
+// 처음 page를 만드는 함수. 나중에 uninit_initializer가 불릴때 사용할 initializer를 함수에 넣어준다.
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
@@ -48,15 +50,42 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	// bool succ;
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		
+		// Which field should be modified?
+		struct page page; // page가 NULL이면 안되는데
+
+		if (VM_TYPE(type) == VM_ANON) {
+			uninit_new(&page, upage, init, type, aux, &anon_initializer);
+			page.writable = writable;
+
+		} else if (VM_TYPE(type) == VM_FILE) {
+			PANIC("panic while vm_alloc_page_with_initializer vm_type VM_FILE");
+			uninit_new(&page, upage, init, type, aux, &file_map_initializer);
+			page.writable = writable;
+
+		} else if (type == VM_MARKER_0) {
+			uninit_new(&page, upage, init, type, aux, NULL);
+			page.writable = true;
+
+		} else {
+			PANIC("panic while vm_alloc_page_with_initializer vm_type wrong");
+		}
+
+
 
 		/* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt, &page); 
 	}
+
+
+	//return true;
 err:
 	return false;
 }
@@ -96,6 +125,7 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
+	// page replacement algorithm anything
 
 	return victim;
 }
@@ -106,6 +136,7 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
+	// swap out with function pointer
 
 	return NULL;
 }
@@ -119,13 +150,16 @@ vm_get_frame (void) {
 	struct frame *frame = NULL;
 	void *kva;
 	/* TODO: Fill this function. */
-	kva = palloc_get_page(PAL_USER);
+	kva = palloc_get_page(PAL_USER | PAL_ZERO);
 	if (kva){
 		frame -> kva = kva;
 		frame -> page = NULL;
-	} else {
+		return frame;
+	}else {
 		PANIC("todo");
+		//frame = vm_evict_frame();
 	}
+
 	
 
 	ASSERT (frame != NULL);
@@ -168,7 +202,16 @@ bool
 vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-	page -> va = va;
+	page = spt_find_page(&thread_current() -> spt, va);
+	if (page == NULL) {
+		//page = vm_alloc_page()
+		
+		PANIC("vm_claim_page");
+		
+		//page -> va = va; ???
+		// 해당하는 페이지가 없으면 어쩌지?
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
@@ -183,8 +226,9 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
-	
+	// r/w permission을 어떻게 줘야 되지?
+	// pml4_set_page말고 쓸만한 다른 함수가 있나?
+	pml4_set_page(thread_current() -> pml4, page -> va, frame -> kva, page -> writable);
 
 	return swap_in (page, frame->kva);
 }
@@ -206,4 +250,13 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+// my functions
+void
+info_for_lazy_init(struct info_for_lazy *info, struct file *file, size_t page_read_bytes, size_t page_zero_bytes, bool writable) {
+	info -> file = file;
+	info -> page_read_bytes = page_read_bytes;
+	info -> page_zero_bytes = page_zero_bytes;
+	info -> writable = writable;
 }

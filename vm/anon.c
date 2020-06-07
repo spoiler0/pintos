@@ -31,6 +31,12 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+
+	// type check하고
+	// page랑 kva랑 연결해주고
+	// vm_anon_init 불러서 init해주고?
+	// 또 뭘 더해야되지?
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */

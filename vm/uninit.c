@@ -43,15 +43,22 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 }
 
 /* Initalize the page on first fault */
+// 이 함수는 first page fault에서 page_fault -> vm_do_claim_page -> swap_in(uninit_initialize) 를 따라서 call 됨
 static bool
 uninit_initialize (struct page *page, void *kva) {
 	struct uninit_page *uninit = &page->uninit;
 
 	/* Fetch first, page_initialize may overwrite the values */
+	// init : lazy_load_segment(struct page *, void *)
 	vm_initializer *init = uninit->init;
 	void *aux = uninit->aux;
 
 	/* TODO: You may need to fix this function. */
+	// 여기서 anon_initializer 또는 file_initializer를 call	(At first page fault)
+	// init -> lazy_load_segment 일 때, 여기서 kva에 file에서 값 불러오고
+	if (page_get_type(page) == VM_MARKER_0) {
+		return true;
+	}
 	return uninit->page_initializer (page, uninit->type, kva) &&
 		(init ? init (page, aux) : true);
 }

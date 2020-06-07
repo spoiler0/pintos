@@ -831,6 +831,29 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	
+	/* Get a frame. */
+	struct frame *frame = page -> frame; // 뒤에서 error나면 free는 어떻게 해주지?
+	if (frame == NULL) {
+		//palloc_free_page(frame -> kva);
+		PANIC("panic while loading file : fail to get frame.");
+		return false;
+	}
+
+	//aux = (struct info_for_lazy *)aux;
+
+	struct info_for_lazy *info = aux;
+
+	/* Load this frame */
+	if (file_read(info -> file, frame -> kva, info -> page_read_bytes) != (int) info -> page_read_bytes) { 
+		PANIC("panic while loading file : fail to read_file.");
+		palloc_free_page(frame -> kva);
+		// How to free frame? 
+		return false;
+	}
+	memset(frame -> kva + info -> page_read_bytes, 0, info -> page_zero_bytes);
+	
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -862,9 +885,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct info_for_lazy info;
+		info_for_lazy_init(&info, file, page_read_bytes, page_zero_bytes, writable);
+		
+		// file, ofs, page_read_bytes, page_zero_bytes 말고 또 넘겨줘야 되는게 뭐가 있지?
+		// ofs는 넘겨줄 필요 없이 한번만 설정해 줘도 될거 같기도 하고
+		// 왜 이전처럼 while문 밖에 file_seek(ofs)가 없을까
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, &info))
 			return false;
 
 		/* Advance. */
@@ -880,11 +908,15 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	
+	if (!vm_alloc_page(VM_MARKER_0, stack_bottom, true)) {
+		PANIC("panic during setup_stack");
+	}
+	success = vm_claim_page(stack_bottom);
 
 	return success;
 }

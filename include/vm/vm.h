@@ -45,6 +45,7 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem;
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -62,6 +63,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	//bool writable;
 };
 
 /* The function table for page operations.
@@ -74,6 +76,15 @@ struct page_operations {
 	void (*destroy) (struct page *);
 	enum vm_type type;
 };
+
+// information that will be given to lazy_load_segment as aux
+struct info_for_lazy {
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	bool writable;
+};
+void info_for_lazy_init(struct info_for_lazy *, struct file *, size_t, size_t, bool);
 
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
 #define swap_out(page) (page)->operations->swap_out (page)
